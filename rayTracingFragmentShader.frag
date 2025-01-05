@@ -1,7 +1,10 @@
 struct Material{
     vec3 color;
     bool reflectColor;
+    int type; 
 };
+
+const int LAMBERT = 0, METAL = 1;
 
 
 struct Hit{
@@ -39,7 +42,7 @@ vec3 triangleNormal(Triangle tri){
 }
 
 Triangle buildTriangle(vec3 a, vec3 b, vec3 c, vec3 color){
-    Material mater = Material( color, false  );
+    Material mater = Material( color, false, 0  );
     return Triangle( a, b, c, triangleNormal(a, b, c), mater );
 }
 
@@ -146,9 +149,9 @@ Hit rayTraceScene1(vec3 ro, vec3 rd){
     //tri = rotateTriangle(tri, iTime);
     
     Plane plane = Plane( vec3(0., -2., 0.), vec3(0., 1., 0.), 
-            Material( vec3(.1), true ) );
+            Material( vec3(.1), true, 0 ) );
             
-    Sphere sphere = Sphere( vec3(cos(iTime)*3., 1., z), 1.5, Material(vec3(0., 0., 1.), false) );
+    Sphere sphere = Sphere( vec3(cos(iTime)*3., 1., z), 1.5, Material(vec3(0., 0., 1.), false, 0) );
             
     //Hit triHit = rayTraceTriangle(ro, rd, tri);
     Hit planeHit = rayTracePlane(ro, rd, plane);
@@ -228,19 +231,21 @@ vec3 randomOnHemisphere(vec3 normal){
 }
 
 
-vec4 scene2(vec3 ro, vec3 rd, const int c){
+vec4 scene2(vec3 ro, vec3 rd, const int c, float scale){
 
     
-    Plane plane = Plane( vec3(0., -1., 0.), normalize(vec3(1., 1., 0.)), 
-            Material( vec3(.1), true ) );
+    Plane plane = Plane( vec3(0., -1., 0.), normalize(vec3(0., 1., 0.)), 
+            Material( vec3(1., 0.,0.), true, 1 ) );
             
-    Sphere sphere = Sphere( vec3(0., 1., 2.), 1.5, Material(vec3(0., 0., 1.), false) );
+    Sphere sphere = Sphere( vec3(0., 1, 2.), 1.5, Material(vec3(0., 0., 1.), false, 1) );
 
     
+    vec3 att = vec3(1.);
     
-    
-    for(int i=0;i<c;i++){
-        Hit hit;
+    int i=0;
+    Hit hit;
+    for(;i<c;i++){
+        
         hit.hh = false;
         Hit planeHit = rayTracePlane(ro, rd, plane);
         Hit sphereHit = rayTraceSphere(ro, rd, sphere);
@@ -257,12 +262,18 @@ vec4 scene2(vec3 ro, vec3 rd, const int c){
         }
         
         if(hit.hh==true){
-            ro = hit.hp;
-            rd = randomOnHemisphere(hit.n);
+            ro = hit.hp+hit.n*.001;
+            if(hit.material.type == LAMBERT){
+                rd = normalize(randomOnHemisphere(hit.n) + hit.n);
+            }else{
+                rd = normalize(reflect( rd, hit.n ));
+            }
+            att *= hit.material.color;
+            
         }else{
             
-            float a = 0.5*(rd.y + 1.0);
-            return vec4((1.0-a)*vec3(1.0, sin(iTime), cos(iTime)) + a*vec3(0.5, 0.7*cos(iTime), 1.0), 1.);
+            float a = (rd.y + 1.) * .5;
+            return vec4(att*((1.0-a) * vec3(1.0, 1.0, 1.0) + a*vec3(0.5, 0.7, 1.0)), 1.);
         }
     }
     
@@ -286,14 +297,14 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec4 c = vec4(0.);
     vec2 s = vec2(-.001,-.001);
     const int ss = 5;
-    for(int i=0; i<ss;i++){
-        c+=scene2(ro, normalize( vec3(uv+s*(float(i)+1.), 1.)  ), 3);
-    }
+   
+    c=scene2(ro, normalize( vec3(uv, 1.)  ),2, .4);
+    
 
     
   
     
-    fragColor = c/float(ss);
+    fragColor = c;
     
     
 }
