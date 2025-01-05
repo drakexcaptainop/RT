@@ -137,7 +137,7 @@ float light( vec3 ls, vec3 ro, Hit hit ){
 }
 
 
-Hit rayTraceScene(vec3 ro, vec3 rd){
+Hit rayTraceScene1(vec3 ro, vec3 rd){
     float z = 5.;
    // Triangle tri = buildTriangle( vec3(-.8, -.8, z), 
         //vec3(0., .8, z), vec3(.8, -.8, z), vec3(1., 0., 1.)
@@ -171,12 +171,14 @@ Hit rayTraceScene(vec3 ro, vec3 rd){
     return hit;
 }
 
+
+
 Hit reflection(vec3 rd, Hit hit, float eps){
     rd = rd - 2.*dot(rd, hit.n)*hit.n;
     vec3 ro = hit.hp + hit.n * eps;
     rd.x *= iResolution.y/iResolution.x;
     
-    Hit reflectionHit = rayTraceScene(ro, rd);
+    Hit reflectionHit = rayTraceScene1(ro, rd);
     if(!reflectionHit.hh){ reflectionHit.material.color = vec3(0.); }
     
     return reflectionHit;
@@ -187,8 +189,89 @@ float shadow(vec3 ls, Hit hit, float eps){
     vec3 ro = hit.hp + hit.n * eps;
     vec3 rd = l;
     
-    Hit shadowHit = rayTraceScene( ro, rd );
+    Hit shadowHit = rayTraceScene1( ro, rd );
     return 1.-float(shadowHit.hh);
+}
+
+vec4 scene1(vec3 ro, vec3 rd){
+    vec3 ls = vec3(0., 5., 4.*cos(iTime));
+    
+    Hit hit = rayTraceScene1( ro, rd );
+    if(hit.hh){
+        if(hit.material.reflectColor){
+            Hit reflectionHit = reflection( rd, hit, 0.01 );
+            hit.material.color += 1.*reflectionHit.material.color;
+        }
+        
+        
+
+        return vec4( (hit.material.color) * light(ls, ro, hit) * shadow(ls, hit, .01), 1. );
+    }else{
+        return vec4(1.);
+    }
+}
+
+float random(vec2 uv) {
+    // Dot product introduces variety in seed
+    float dotProduct = dot(uv, vec2(12.9898, 78.233));
+    // Use sin and fract for randomness
+    return fract(sin(dotProduct) * 43758.5453123);
+}
+
+vec3 randomOnHemisphere(vec3 normal){
+    vec3 v = vec3( random( normal.xy ), random( normal.xz ), random( normal.zy ) );
+    v = normalize(v);
+    if(dot(normal, v)<0.){
+        return -v;
+    }
+    return v;
+}
+
+
+vec4 scene2(vec3 ro, vec3 rd, const int c){
+
+    
+    Plane plane = Plane( vec3(0., -1., 0.), normalize(vec3(1., 1., 0.)), 
+            Material( vec3(.1), true ) );
+            
+    Sphere sphere = Sphere( vec3(0., 1., 2.), 1.5, Material(vec3(0., 0., 1.), false) );
+
+    
+    
+    
+    for(int i=0;i<c;i++){
+        Hit hit;
+        hit.hh = false;
+        Hit planeHit = rayTracePlane(ro, rd, plane);
+        Hit sphereHit = rayTraceSphere(ro, rd, sphere);
+        if(sphereHit.hh && planeHit.hh){
+            if(sphereHit.t < planeHit.t){
+                 hit = sphereHit;
+            }else{
+                hit = planeHit;
+            }
+        }else if(sphereHit.hh){
+            hit = sphereHit;
+        }else if(planeHit.hh){
+            hit = planeHit;
+        }
+        
+        if(hit.hh==true){
+            ro = hit.hp;
+            rd = randomOnHemisphere(hit.n);
+        }else{
+            
+            float a = 0.5*(rd.y + 1.0);
+            return vec4((1.0-a)*vec3(1.0, sin(iTime), cos(iTime)) + a*vec3(0.5, 0.7*cos(iTime), 1.0), 1.);
+        }
+    }
+    
+    return vec4(0.,0.,0.,1.);
+    
+    
+    
+    
+    
 }
 
 
@@ -198,23 +281,19 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
     vec2 uv = fragCoord/iResolution.xy * 2. - 1.;
     uv.x *= iResolution.x/iResolution.y;
     vec3 ro = vec3(0., 0., -2.);
-    vec3 rd = normalize( vec3(uv, 1.) );
+    vec3 rd = vec3(0.);
     
-    
-    
-    vec3 ls = vec3(0., 5., 4.*cos(iTime));
-    
-    Hit hit = rayTraceScene( ro, rd );
-    if(hit.hh){
-        if(hit.material.reflectColor){
-            Hit reflectionHit = reflection( rd, hit, 0.01 );
-            hit.material.color += 1.*reflectionHit.material.color;
-        }
-        
-        
-
-        fragColor = vec4( (hit.material.color) * light(ls, ro, hit) * shadow(ls, hit, .01), 1. );
+    vec4 c = vec4(0.);
+    vec2 s = vec2(-.001,-.001);
+    const int ss = 5;
+    for(int i=0; i<ss;i++){
+        c+=scene2(ro, normalize( vec3(uv+s*(float(i)+1.), 1.)  ), 3);
     }
+
+    
+  
+    
+    fragColor = c/float(ss);
     
     
 }
